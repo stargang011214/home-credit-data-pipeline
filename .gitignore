@@ -1,0 +1,22 @@
+# 원본 데이터 및 DB 파일 (용량이 커서 저장소에 포함하지 않음)
+*.csv
+*.db
+*.sqlite
+*.sqlite3
+*.zip
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# 개발 환경
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 로그
+*.log
