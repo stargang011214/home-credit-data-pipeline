@@ -12,22 +12,15 @@
 |---|---|
 | 원본 데이터 | Home Credit Default Risk (Kaggle) — `application_train.csv` |
 | 데이터 규모 | 307,511건 × 122컬럼 (약 166MB) |
-| 대상 DB | SQLite (`test_etl.db`) |
+| 대상 DB | PostgreSQL (정규화 스키마 설계·검증), SQLite (`test_etl.db`, 대용량 적재) |
 | 수행 기간 | 4주 (설계 1주 / ETL 1주 / 검증 1주 / 문서화 1주) |
-| 사용 기술 | Python (pandas, SQLAlchemy), SQL, SQLite, DBeaver |
+| 사용 기술 | Python (pandas, SQLAlchemy), SQL, PostgreSQL, SQLite, DBeaver |
 
 ---
 
 ## 파이프라인 흐름
 
-```
-[원천 데이터]                [설계]                    [ETL]                   [검증]
-application_train.csv  →  구조 분석·결측치 파악   →  Chunk 단위 분할 적재  →  건수/합계 대조
-    307,511건 × 122컬럼     정제(122→81컬럼)          예외 처리(try-except)     무결성·PK 검증
-                            DDL 자동 생성              로깅                      행 단위 전수 대조
-                                                          ↓                          ↓
-                                                    test_etl.db              오차율 0.00%
-```
+![파이프라인 아키텍처](docs/images/architecture.png)
 
 ---
 
@@ -37,12 +30,13 @@ application_train.csv  →  구조 분석·결측치 파악   →  Chunk 단위 
 .
 ├── sql/
 │   ├── schema.sql               # 설계 단계에서 자동 생성한 DDL (PK 제약조건 포함)
+│   ├── ddl_postgres.sql         # PostgreSQL 정규화 스키마 (PK·FK)
 │   └── validation_queries.sql   # 정합성 검증에 사용한 SQL 쿼리 모음
 ├── src/
 │   ├── 01_analysis/             # 1주차: 원천 데이터 분석 및 DB 설계
 │   ├── 02_etl/                  # 2주차: ETL 파이프라인 구현
 │   └── 03_validation/           # 3주차: SQL 정합성 검증
-├── docs/                        # 4주차: 산출 문서 (엑셀)
+├── docs/                        # 4주차: 산출 문서 (엑셀) + 다이어그램(images/)
 │   ├── 01_테이블_정의서.xlsx
 │   ├── 02_데이터_매핑_정의서.xlsx
 │   └── 03_정합성_검증_보고서.xlsx
@@ -61,8 +55,17 @@ application_train.csv  →  구조 분석·결측치 파악   →  Chunk 단위 
 | `day02_data_profiling.py` | 데이터 구조 파악(shape, 컬럼 목록, 결측치 TOP 10), 마스터키(SK_ID_CURR) 유일성 검증, `bureau.csv`와의 외래키 연결 가능성 확인 |
 | `day03_full_cleaning.py` | 결측치 50% 이상 컬럼 41개 제거(122 → 81컬럼), 수치형은 중앙값·문자형은 `Unknown`으로 결측치 전량 처리 |
 | `day04_generate_ddl.py` | 정제 데이터의 dtype을 SQL 타입으로 매핑해 `schema.sql` 자동 생성, 학력 컬럼을 코드 테이블로 분리하는 제3정규화 예시 구현 |
+| `sql/ddl_postgres.sql` | PostgreSQL에 `education_type`(부모)·`application_train`(자식) 테이블을 PK·FK 제약조건으로 생성하고 DBeaver로 관계 확인 |
 
 데이터 사전(`HomeCredit_columns_description.csv`)을 참조해 컬럼 의미를 확인했고, 마스터키 후보 컬럼의 중복 여부를 사전 검증한 뒤 PK로 확정했습니다.
+
+![ERD](docs/images/erd.png)
+
+> ERD는 `schema.sql`(81컬럼) 기준입니다. 학력 코드 테이블 분리는 PostgreSQL에 PK·FK로 구현해 검증했으며, `BUREAU`는 키 연결만 확인하고 적재하지 않은 확장 영역입니다.
+
+실제 PostgreSQL에 생성한 테이블 관계 (DBeaver 엔티티 관계도):
+
+![PostgreSQL ERD](docs/images/erd_postgres_dbeaver.png)
 
 ### 2주차 — ETL 파이프라인 구현 (`src/02_etl`)
 
